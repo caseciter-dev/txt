@@ -5,7 +5,7 @@ from datetime import datetime
 import pytz
 
 # Configuration
-PDF_URL = "YOUR_PDF_LINK_HERE"
+PDF_URL = "https://cdn.sci-notifier.codechips.in/orders/latest.pdf"
 OUTPUT_DIR = "archive"
 
 def download_and_convert():
