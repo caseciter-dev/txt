@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Archive</title>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         body {
             font-family: Georgia, serif;
@@ -30,7 +30,7 @@
         }
         .layout {
             display: grid;
-            grid-template-columns: 200px 1fr;
+            grid-template-columns: 220px 1fr;
             gap: 40px;
         }
         @media (max-width: 600px) {
@@ -38,9 +38,11 @@
         }
         .sidebar h3 {
             margin-top: 0;
-            font-size: 1rem;
+            font-size: 0.95rem;
             text-transform: uppercase;
             letter-spacing: 1px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 5px;
         }
         .date-list {
             list-style: none;
@@ -48,22 +50,27 @@
             margin: 0;
         }
         .date-item {
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
         .date-item a {
             color: #000000;
             text-decoration: none;
-            border-bottom: 1px string #ccc;
+            display: inline-block;
+            padding: 2px 0;
         }
         .date-item a:hover, .date-item a.active {
             font-weight: bold;
-            border-bottom: 1px solid #000000;
+            border-bottom: 2px solid #000000;
         }
         .content {
             font-size: 1.05rem;
         }
-        .content h1, .content h2 { font-weight: normal; margin-top: 0; }
-        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .content h1, .content h2, .content h3 { font-weight: normal; margin-top: 0; }
+        .error-box {
+            border: 1px dashed #000000;
+            padding: 15px;
+            background: #fafafa;
+        }
     </style>
 </head>
 <body>
@@ -75,13 +82,14 @@
     
     <div class="layout">
         <aside class="sidebar">
-            <h3>Available Dates</h3>
+            <h3>Archived Logs</h3>
             <ul id="date-list" class="date-list">
-                </ul>
+                <li>Loading listing...</li>
+            </ul>
         </aside>
         
         <main class="content" id="viewer">
-            <p>Select a date from the sidebar to view the document text.</p>
+            <p>Awaiting initialization...</p>
         </main>
     </div>
 </div>
@@ -90,17 +98,39 @@
     const dateListEl = document.getElementById('date-list');
     const viewerEl = document.getElementById('viewer');
 
+    // Safe Markdown Renderer Fallback
+    function renderMarkdown(rawText) {
+        try {
+            if (typeof marked !== 'undefined' && marked.parse) {
+                return marked.parse(rawText);
+            } else if (typeof marked === 'function') {
+                return marked(rawText);
+            }
+            // Absolute plain-text fallback if CDN fails to load entirely
+            return `<pre style="white-space: pre-wrap; font-family: inherit;">${rawText}</pre>`;
+        } catch(e) {
+            return `<pre style="white-space: pre-wrap;">${rawText}</pre>`;
+        }
+    }
+
     async function init() {
         try {
-            const response = await fetch('file_list.json');
+            const response = await fetch('file_list.json', { cache: "no-store" });
+            if (!response.ok) throw new Error(`HTTP status ${response.status}`);
+            
             const dates = await response.json();
             
-            if (dates.length === 0) {
-                viewerEl.innerHTML = "<p>No documents logs archived yet.</p>";
+            if (!dates || dates.length === 0) {
+                dateListEl.innerHTML = "<li>None found</li>";
+                viewerEl.innerHTML = `
+                    <div class="error-box">
+                        <strong>Registry Index Empty</strong>
+                        <p>The file <code>file_list.json</code> was retrieved successfully, but it does not contain any file references yet. Make sure your GitHub Action has run fully at least once.</p>
+                    </div>`;
                 return;
             }
 
-            // Populate Sidebar
+            dateListEl.innerHTML = ""; 
             dates.forEach((date, index) => {
                 const li = document.createElement('li');
                 li.className = 'date-item';
@@ -108,37 +138,3 @@
                 a.href = `#${date}`;
                 a.textContent = date;
                 a.onclick = (e) => {
-                    document.querySelectorAll('.date-item a').forEach(el => el.classList.remove('active'));
-                    a.classList.add('active');
-                    loadDoc(date);
-                };
-                li.appendChild(a);
-                dateListEl.appendChild(li);
-
-                // Auto-load the newest document on fresh start
-                if (index === 0) {
-                    a.classList.add('active');
-                    loadDoc(date);
-                }
-            });
-        } catch (err) {
-            viewerEl.innerHTML = "<p>Error loading document index directory.</p>";
-        }
-    }
-
-    async function loadDoc(date) {
-        viewerEl.innerHTML = "<p>Loading document text...</p>";
-        try {
-            const res = await fetch(`archive/${date}.md`);
-            if (!res.ok) throw new Error();
-            const mdText = await res.text();
-            viewerEl.innerHTML = marked.parse(mdText);
-        } catch (e) {
-            viewerEl.innerHTML = `<p>Error retrieving document text for ${date}.</p>`;
-        }
-    }
-
-    init();
-</script>
-</body>
-</html>
